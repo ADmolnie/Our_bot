@@ -2,10 +2,11 @@ from config import *
 import telebot
 import time
 import sqlite3 
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from random import randint
 from logic import Text2ImageAPI
 from translate import Translator
+from threading import Thread
+from telebot import types
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -13,10 +14,13 @@ translator = Translator(from_lang="en", to_lang="ru")
 sent4 = ''
 sent5 = ''
 r = 0
+users = {}
+info = ''
 
 def senf_info(bot, message, row):
     global sent4
     global sent5
+    global info
         
     info = f"""
 📍Title of movie:   {row[2]}
@@ -44,12 +48,6 @@ def senf_info(bot, message, row):
     bot.send_message(message.chat.id, info)
 
 
-def main_markup():
-  markup = ReplyKeyboardMarkup()
-  markup.add(KeyboardButton('/random'))
-  return markup
-
-
 @bot.message_handler(commands=['trans'])
 def trans(message):
     global r
@@ -69,7 +67,7 @@ def send_welcome(message):
 Нажмите /random, чтобы получить случайный фильм
 Или напишите название фильма, и я постараюсь его найти! 🎬
 
-!!!Обязательно: /help, иначе вы не сможете нормально пользоваться ботом""", reply_markup=main_markup())
+!!!Обязательно: /help, иначе вы не сможете нормально пользоваться ботом""")
 
 
 @bot.message_handler(commands=['random'])
@@ -100,15 +98,14 @@ def send_welcome(message):
 /AI - будет ли ИИ генерировать для вас изображение или нет, по умолчанию она включена(on)
                      
 /trans - переведёт описание фильма на русский
+                     
+/alert - 
 
 Можете просто отправить название фильма, с большой буквы на инглиш
                      
 если подумали: а где же избранное? То обломитесь, если понравилось, сразу смотрите!
             
-                ВСЁ!""", reply_markup=main_markup())
-
-
-
+                ВСЁ!""")
 
 
 @bot.message_handler(content_types=['text'])
@@ -147,7 +144,6 @@ def yearss(message):
     a = ''
     a1 = ''
     b = 0
-    c = 0
     for i in sent2:
         if b == 1:
             a1 += str(i)
@@ -158,24 +154,46 @@ def yearss(message):
         else:
             pass
     d = a + ' ' + '"' + a1 + '"'
-    bot.send_message(message.chat.id, d)
-    if a != '>' or a != '<' or a != '==':
-        bot.send_message(message.chat.id, "Давай по новой(неправильный знак)")
-        bot.send_message(message.chat.id, a)
-        bot.send_message(message.chat.id, a1)
-    elif a == '>' and int(a1) > 2020:
-        bot.send_message(message.chat.id, "Фильм с годом больше чем 2020 нет")
-    elif a == '<' and int(a1) < 1920:
-        bot.send_message(message.chat.id, "Фильм с годом меньше чем 1920 нет")
+    if a == '>':
+        if int(a1) > 2020:
+            bot.send_message(message.chat.id, "Фильм с годом больше чем 2020 нет")
+        else:
+            r += 1
+            con = sqlite3.connect("movie_database.db")
+            with con:
+                cur = con.cursor()
+                cur.execute(f"SELECT * FROM movies WHERE year {d} ORDER BY RANDOM() LIMIT 1")
+                row = cur.fetchall()[0]
+                cur.close()
+            senf_info(bot, message, row)
+    elif a == '<': 
+        if int(a1) < 1920:
+            bot.send_message(message.chat.id, "Фильм с годом меньше чем 1920 нет")
+        else:
+            r += 1
+            con = sqlite3.connect("movie_database.db")
+            with con:
+                cur = con.cursor()
+                cur.execute(f"SELECT * FROM movies WHERE year {d} ORDER BY RANDOM() LIMIT 1")
+                row = cur.fetchall()[0]
+                cur.close()
+            senf_info(bot, message, row)
+    elif a == '=':
+        if int(a1) > 2020:
+            bot.send_message(message.chat.id, "Фильм с годом больше чем 2020 нет")
+        elif int(a1) < 1920:
+            bot.send_message(message.chat.id, "Фильм с годом меньше чем 1920 нет")
+        else:
+            r += 1
+            con = sqlite3.connect("movie_database.db")
+            with con:
+                cur = con.cursor()
+                cur.execute(f"SELECT * FROM movies WHERE year {d} ORDER BY RANDOM() LIMIT 1")
+                row = cur.fetchall()[0]
+                cur.close()
+            senf_info(bot, message, row)
     else:
-        r += 1
-        con = sqlite3.connect("movie_database.db")
-        with con:
-            cur = con.cursor()
-            cur.execute(f"SELECT * FROM movies WHERE year {d} ORDER BY RANDOM() LIMIT 1")
-            row = cur.fetchall()[0]
-            cur.close()
-        senf_info(bot, message, row)
+        bot.send_message(message.chat.id, "Давай по новой (неправильный знак)")
 
 
 def ratingg(message):
@@ -185,7 +203,6 @@ def ratingg(message):
     a1 = ''
     a2 = ' '
     b = 0
-    c = 0
     for i in sent3:
         if b == 1:
             a1 += str(i)
@@ -196,21 +213,46 @@ def ratingg(message):
         else:
             pass
     d = a + a2 + '"' + a1 + '"'
-    if a != '>' or a != '<' or a != '=':
-        bot.send_message(message.chat.id, "Давай по новой(неправильный знак)")
-    elif a == '>' and a1 == '9.3':
-        bot.send_message(message.chat.id, "Фильм с рейтингом больше чем 9.3 нет")
-    elif a == '<' and a1 == '7.6':
-        bot.send_message(message.chat.id, "Фильм с рейтингом меньше чем 7.6 нет")
+    if a == '>':
+        if float(a1) > 9.3:
+            bot.send_message(message.chat.id, "Фильм с рейтингом больше чем 9.3 нет")
+        else:
+            r += 1
+            con = sqlite3.connect("movie_database.db")
+            with con:
+                cur = con.cursor()
+                cur.execute(f"SELECT * FROM movies WHERE year {d} ORDER BY RANDOM() LIMIT 1")
+                row = cur.fetchall()[0]
+                cur.close()
+            senf_info(bot, message, row)
+    elif a == '<': 
+        if float(a1) < 7.6:
+            bot.send_message(message.chat.id, "Фильм с рейтингом меньше чем 7.6 нет")
+        else:
+            r += 1
+            con = sqlite3.connect("movie_database.db")
+            with con:
+                cur = con.cursor()
+                cur.execute(f"SELECT * FROM movies WHERE year {d} ORDER BY RANDOM() LIMIT 1")
+                row = cur.fetchall()[0]
+                cur.close()
+            senf_info(bot, message, row)
+    elif a == '==':
+        if float(a1) > 9.3:
+            bot.send_message(message.chat.id, "Фильм с рейтингом больше чем 9.3 нет")
+        elif float(a1) < 7.6:
+            bot.send_message(message.chat.id, "Фильм с рейтингом меньше чем 7.6 нет")
+        else:
+            r += 1
+            con = sqlite3.connect("movie_database.db")
+            with con:
+                cur = con.cursor()
+                cur.execute(f"SELECT * FROM movies WHERE year {d} ORDER BY RANDOM() LIMIT 1")
+                row = cur.fetchall()[0]
+                cur.close()
+            senf_info(bot, message, row)
     else:
-        r += 1
-        con = sqlite3.connect("movie_database.db")
-        with con:
-            cur = con.cursor()
-            cur.execute(f"SELECT * FROM movies WHERE rating {d} ORDER BY RANDOM() LIMIT 1")
-            row = cur.fetchall()[0]
-            cur.close()
-        senf_info(bot, message, row)
+        bot.send_message(message.chat.id, "Давай по новой (неправильный знак)")
 
 
 def AI(message):
